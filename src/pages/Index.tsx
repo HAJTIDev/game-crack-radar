@@ -17,6 +17,7 @@ interface Game {
   crackedBy?: string;
   genre: string;
   image: string;
+  steamId?: string;
 }
 
 const mockGames: Game[] = [
@@ -29,7 +30,8 @@ const mockGames: Game[] = [
     drm: ["Denuvo", "Steam"],
     crackedBy: "CODEX",
     genre: "RPG",
-    image: "/placeholder.svg"
+    image: "/placeholder.svg",
+    steamId: "1091500"
   },
   {
     id: "2",
@@ -38,7 +40,8 @@ const mockGames: Game[] = [
     status: "uncracked",
     drm: ["Denuvo", "Ubisoft Connect"],
     genre: "Action",
-    image: "/placeholder.svg"
+    image: "/placeholder.svg",
+    steamId: "2319580"
   },
   {
     id: "3",
@@ -49,7 +52,8 @@ const mockGames: Game[] = [
     drm: ["Steam"],
     crackedBy: "DRM-Free",
     genre: "RPG",
-    image: "/placeholder.svg"
+    image: "/placeholder.svg",
+    steamId: "1086940"
   },
   {
     id: "4",
@@ -60,7 +64,8 @@ const mockGames: Game[] = [
     drm: ["Steam"],
     crackedBy: "CODEX",
     genre: "RPG",
-    image: "/placeholder.svg"
+    image: "/placeholder.svg",
+    steamId: "1716740"
   },
   {
     id: "5",
@@ -69,7 +74,8 @@ const mockGames: Game[] = [
     status: "uncracked",
     drm: ["Denuvo", "Microsoft Store"],
     genre: "Racing",
-    image: "/placeholder.svg"
+    image: "/placeholder.svg",
+    steamId: "1551360"
   },
   {
     id: "6",
@@ -112,6 +118,13 @@ const Index = () => {
   const getDaysSinceCrack = (crackDate: string) => {
     const days = Math.floor((Date.now() - new Date(crackDate).getTime()) / (1000 * 60 * 60 * 24));
     return days;
+  };
+
+  const getSteamImageUrl = (steamId: string, imageType: 'header' | 'capsule' = 'header') => {
+    if (imageType === 'header') {
+      return `https://cdn.akamai.steamstatic.com/steam/apps/${steamId}/header.jpg`;
+    }
+    return `https://cdn.akamai.steamstatic.com/steam/apps/${steamId}/capsule_616x353.jpg`;
   };
 
   return (
@@ -244,12 +257,27 @@ const Index = () => {
           <TabsContent value="all" className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredGames.map((game) => (
-                <Card key={game.id} className="bg-gray-800/50 border-gray-700 hover:border-gray-600 transition-colors">
+                <Card key={game.id} className="bg-gray-800/50 border-gray-700 hover:border-gray-600 transition-colors overflow-hidden">
+                  {game.steamId && (
+                    <div className="aspect-video w-full overflow-hidden">
+                      <img 
+                        src={getSteamImageUrl(game.steamId, 'capsule')} 
+                        alt={game.title}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
+                    </div>
+                  )}
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between">
                       <div className="space-y-1 flex-1">
                         <h3 className="font-semibold text-white text-sm leading-none">{game.title}</h3>
                         <p className="text-xs text-gray-400">{game.genre}</p>
+                        {game.steamId && (
+                          <p className="text-xs text-blue-400">Steam ID: {game.steamId}</p>
+                        )}
                       </div>
                       <Badge 
                         variant="outline" 
@@ -310,12 +338,27 @@ const Index = () => {
           <TabsContent value="latest" className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {latestCracks.map((game) => (
-                <Card key={game.id} className="bg-gradient-to-br from-green-900/20 to-gray-800/50 border-green-700/50">
+                <Card key={game.id} className="bg-gradient-to-br from-green-900/20 to-gray-800/50 border-green-700/50 overflow-hidden">
+                  {game.steamId && (
+                    <div className="aspect-video w-full overflow-hidden">
+                      <img 
+                        src={getSteamImageUrl(game.steamId, 'capsule')} 
+                        alt={game.title}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
+                    </div>
+                  )}
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between">
                       <div className="space-y-1 flex-1">
                         <h3 className="font-semibold text-white text-sm leading-none">{game.title}</h3>
                         <p className="text-xs text-gray-400">{game.genre}</p>
+                        {game.steamId && (
+                          <p className="text-xs text-blue-400">Steam ID: {game.steamId}</p>
+                        )}
                       </div>
                       <Badge variant="outline" className="border-green-400/30 text-green-400">
                         🔥 Fresh
@@ -368,12 +411,27 @@ const Index = () => {
           <TabsContent value="uncracked" className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {uncrackedGames.map((game) => (
-                <Card key={game.id} className="bg-gradient-to-br from-red-900/20 to-gray-800/50 border-red-700/50">
+                <Card key={game.id} className="bg-gradient-to-br from-red-900/20 to-gray-800/50 border-red-700/50 overflow-hidden">
+                  {game.steamId && (
+                    <div className="aspect-video w-full overflow-hidden">
+                      <img 
+                        src={getSteamImageUrl(game.steamId, 'capsule')} 
+                        alt={game.title}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
+                    </div>
+                  )}
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between">
                       <div className="space-y-1 flex-1">
                         <h3 className="font-semibold text-white text-sm leading-none">{game.title}</h3>
                         <p className="text-xs text-gray-400">{game.genre}</p>
+                        {game.steamId && (
+                          <p className="text-xs text-blue-400">Steam ID: {game.steamId}</p>
+                        )}
                       </div>
                       <Badge variant="outline" className="border-red-400/30 text-red-400">
                         🔒 Protected
