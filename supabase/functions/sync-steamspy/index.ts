@@ -19,16 +19,33 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { searchTerm, limit = 100 } = await req.json();
-    
-    console.log(`Fetching data from SteamSpy API for search: ${searchTerm}`);
+    // Handle empty request body gracefully
+    let requestData = {};
+    try {
+      const body = await req.text();
+      if (body && body.trim()) {
+        requestData = JSON.parse(body);
+      }
+    } catch (parseError) {
+      console.log('No valid JSON body provided, using defaults');
+    }
 
-    // Fetch data from SteamSpy API
+    const { searchTerm, limit = 100 } = requestData;
+    
+    console.log(`Fetching data from SteamSpy API with limit: ${limit}`);
+
+    // Fetch data from SteamSpy API - use top100in2weeks by default
     const steamSpyUrl = searchTerm 
       ? `https://steamspy.com/api.php?request=all&format=json`
       : `https://steamspy.com/api.php?request=top100in2weeks&format=json`;
     
+    console.log(`Requesting from: ${steamSpyUrl}`);
+    
     const response = await fetch(steamSpyUrl);
+    if (!response.ok) {
+      throw new Error(`SteamSpy API returned ${response.status}: ${response.statusText}`);
+    }
+    
     const steamSpyData = await response.json();
 
     console.log(`Received ${Object.keys(steamSpyData).length} games from SteamSpy`);
