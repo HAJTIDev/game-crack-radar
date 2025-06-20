@@ -71,11 +71,16 @@ export const useGamesData = () => {
         price: game.price,
         is_free: game.is_free,
         header_image: game.header_image,
-        crack_status: game.crack_status?.[0] // Get first crack status record
+        crack_status: game.crack_status?.[0] ? {
+          status: game.crack_status[0].status as "cracked" | "uncracked" | "drm_free",
+          crack_date: game.crack_status[0].crack_date,
+          cracked_by: game.crack_status[0].cracked_by,
+          drm_protection: game.crack_status[0].drm_protection
+        } : undefined
       })) || [];
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
-    cacheTime: 30 * 60 * 1000, // 30 minutes
+    gcTime: 30 * 60 * 1000, // 30 minutes (replaces cacheTime)
   });
 };
 

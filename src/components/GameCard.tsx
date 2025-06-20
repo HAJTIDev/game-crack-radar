@@ -2,19 +2,7 @@
 import { Calendar, Shield, Users, Clock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-
-interface Game {
-  id: string;
-  title: string;
-  releaseDate: string;
-  crackDate?: string;
-  status: "cracked" | "uncracked";
-  drm: string[];
-  crackedBy?: string;
-  genre: string;
-  image: string;
-  steamId?: string;
-}
+import { Game } from "@/hooks/useGamesData";
 
 interface GameCardProps {
   game: Game;
@@ -35,7 +23,7 @@ const GameCard = ({ game, variant = "default" }: GameCardProps) => {
     return days;
   };
 
-  const getSteamImageUrl = (steamId: string) => {
+  const getSteamImageUrl = (steamId: number) => {
     return `https://cdn.akamai.steamstatic.com/steam/apps/${steamId}/capsule_616x353.jpg`;
   };
 
@@ -60,26 +48,26 @@ const GameCard = ({ game, variant = "default" }: GameCardProps) => {
     return (
       <Badge 
         variant="outline" 
-        className={game.status === "cracked" 
+        className={game.crack_status?.status === "cracked" 
           ? "border-green-400/30 text-green-400" 
           : "border-red-400/30 text-red-400"
         }
       >
-        {game.status === "cracked" ? "✅ Cracked" : "❌ Uncracked"}
+        {game.crack_status?.status === "cracked" ? "✅ Cracked" : "❌ Uncracked"}
       </Badge>
     );
   };
 
   return (
     <Card className={getCardClassName()}>
-      {game.steamId && (
+      {game.header_image && (
         <div className="aspect-video w-full overflow-hidden">
           <img 
-            src={getSteamImageUrl(game.steamId)} 
+            src={game.header_image || getSteamImageUrl(game.steam_id)} 
             alt={game.title}
             className="w-full h-full object-cover"
             onError={(e) => {
-              e.currentTarget.style.display = 'none';
+              e.currentTarget.src = getSteamImageUrl(game.steam_id);
             }}
           />
         </div>
@@ -89,52 +77,52 @@ const GameCard = ({ game, variant = "default" }: GameCardProps) => {
           <div className="space-y-1 flex-1">
             <h3 className="font-semibold text-white text-sm leading-none">{game.title}</h3>
             <p className="text-xs text-gray-400">{game.genre}</p>
-            {game.steamId && (
-              <p className="text-xs text-blue-400">Steam ID: {game.steamId}</p>
-            )}
+            <p className="text-xs text-blue-400">Steam ID: {game.steam_id}</p>
           </div>
           {getStatusBadge()}
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="space-y-2">
-          <div className="flex items-center space-x-2 text-xs">
-            <Calendar className="h-3 w-3 text-gray-400" />
-            <span className="text-gray-400">Released:</span>
-            <span className="text-white">{formatDate(game.releaseDate)}</span>
-          </div>
+          {game.release_date && (
+            <div className="flex items-center space-x-2 text-xs">
+              <Calendar className="h-3 w-3 text-gray-400" />
+              <span className="text-gray-400">Released:</span>
+              <span className="text-white">{formatDate(game.release_date)}</span>
+            </div>
+          )}
           
-          {game.crackDate && variant !== "uncracked" && (
+          {game.crack_status?.crack_date && variant !== "uncracked" && (
             <div className="flex items-center space-x-2 text-xs">
               <Shield className="h-3 w-3 text-green-400" />
               <span className="text-gray-400">Cracked:</span>
-              <span className="text-green-400">{formatDate(game.crackDate)}</span>
+              <span className="text-green-400">{formatDate(game.crack_status.crack_date)}</span>
             </div>
           )}
 
-          {variant === "latest" && game.crackDate && (
+          {variant === "latest" && game.crack_status?.crack_date && (
             <div className="flex items-center space-x-2 text-xs">
               <Clock className="h-3 w-3 text-blue-400" />
               <span className="text-gray-400">Days ago:</span>
-              <span className="text-blue-400">{getDaysSinceCrack(game.crackDate)}</span>
+              <span className="text-blue-400">{getDaysSinceCrack(game.crack_status.crack_date)}</span>
             </div>
           )}
 
-          {variant === "uncracked" && (
+          {variant === "uncracked" && game.release_date && (
             <div className="flex items-center space-x-2 text-xs">
               <Clock className="h-3 w-3 text-red-400" />
               <span className="text-gray-400">Protected for:</span>
               <span className="text-red-400">
-                {Math.floor((Date.now() - new Date(game.releaseDate).getTime()) / (1000 * 60 * 60 * 24))} days
+                {Math.floor((Date.now() - new Date(game.release_date).getTime()) / (1000 * 60 * 60 * 24))} days
               </span>
             </div>
           )}
           
-          {game.crackedBy && (
+          {game.crack_status?.cracked_by && (
             <div className="flex items-center space-x-2 text-xs">
               <Users className={`h-3 w-3 ${variant === "latest" ? "text-yellow-400" : "text-blue-400"}`} />
               <span className="text-gray-400">By:</span>
-              <span className={variant === "latest" ? "text-yellow-400" : "text-blue-400"}>{game.crackedBy}</span>
+              <span className={variant === "latest" ? "text-yellow-400" : "text-blue-400"}>{game.crack_status.cracked_by}</span>
             </div>
           )}
         </div>
@@ -144,7 +132,7 @@ const GameCard = ({ game, variant = "default" }: GameCardProps) => {
             {variant === "uncracked" ? "Active DRM:" : variant === "latest" ? "DRM Bypassed:" : "DRM Protection:"}
           </span>
           <div className="flex flex-wrap gap-1">
-            {game.drm.map((protection, index) => (
+            {game.crack_status?.drm_protection?.map((protection, index) => (
               <Badge 
                 key={index} 
                 variant="secondary" 
@@ -156,7 +144,11 @@ const GameCard = ({ game, variant = "default" }: GameCardProps) => {
               >
                 {variant === "uncracked" ? `🛡️ ${protection}` : protection}
               </Badge>
-            ))}
+            )) || (
+              <Badge variant="secondary" className="text-xs bg-gray-700 text-gray-300">
+                Unknown
+              </Badge>
+            )}
           </div>
         </div>
       </CardContent>
