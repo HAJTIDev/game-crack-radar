@@ -121,8 +121,20 @@ const Index = () => {
           </div>
         )}
 
+        {/* Empty State */}
+        {!isLoading && !error && games.length === 0 && (
+          <div className="text-center py-12">
+            <Gamepad2 className="h-16 w-16 text-gray-600 mx-auto mb-4" />
+            <h3 className="text-xl font-semibold text-gray-300 mb-2">No Games Found</h3>
+            <p className="text-gray-400 mb-6">
+              The database is empty. Click "Sync SteamSpy" to load game data.
+            </p>
+            <SyncButton />
+          </div>
+        )}
+
         {/* Main Content */}
-        {!isLoading && !error && (
+        {!isLoading && !error && games.length > 0 && (
           <GameTabs
             filteredGames={filteredGames}
             latestCracks={latestCracks}

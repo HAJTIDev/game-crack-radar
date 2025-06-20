@@ -54,7 +54,12 @@ export const useGamesData = () => {
 
       console.log(`Fetched ${data?.length || 0} games from database`);
 
-      return data?.map(game => ({
+      if (!data || data.length === 0) {
+        console.log('No games found in database. Try syncing with SteamSpy first.');
+        return [];
+      }
+
+      return data.map(game => ({
         id: game.id,
         steam_id: game.steam_id,
         title: game.title,
@@ -76,11 +81,15 @@ export const useGamesData = () => {
           crack_date: game.crack_status[0].crack_date,
           cracked_by: game.crack_status[0].cracked_by,
           drm_protection: game.crack_status[0].drm_protection
-        } : undefined
-      })) || [];
+        } : {
+          status: "uncracked" as const,
+          drm_protection: ["Steam"]
+        }
+      }));
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: 30 * 60 * 1000, // 30 minutes (replaces cacheTime)
+    gcTime: 30 * 60 * 1000, // 30 minutes
+    retry: 1,
   });
 };
 
