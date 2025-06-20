@@ -25,7 +25,7 @@ const GameTabs = ({ filteredGames, latestCracks, uncrackedGames }: GameTabsProps
       </TabsList>
 
       <TabsContent value="all" className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {filteredGames.map((game) => (
             <GameCard key={game.id} game={game} />
           ))}
@@ -38,7 +38,7 @@ const GameTabs = ({ filteredGames, latestCracks, uncrackedGames }: GameTabsProps
       </TabsContent>
 
       <TabsContent value="latest" className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {latestCracks.map((game) => (
             <GameCard key={game.id} game={game} variant="latest" />
           ))}
@@ -51,7 +51,7 @@ const GameTabs = ({ filteredGames, latestCracks, uncrackedGames }: GameTabsProps
       </TabsContent>
 
       <TabsContent value="uncracked" className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {uncrackedGames.map((game) => (
             <GameCard key={game.id} game={game} variant="uncracked" />
           ))}

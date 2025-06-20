@@ -8,12 +8,25 @@ import SearchFilters from "@/components/SearchFilters";
 import GameTabs from "@/components/GameTabs";
 import SyncButton from "@/components/SyncButton";
 import { useGamesData } from "@/hooks/useGamesData";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 
 const Index = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<"all" | "cracked" | "uncracked">("all");
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 50;
   
-  const { data: games = [], isLoading, error } = useGamesData();
+  const { data: gamesData, isLoading, error } = useGamesData(currentPage, pageSize);
+  const games = gamesData?.games || [];
+  const totalCount = gamesData?.totalCount || 0;
+  const totalPages = Math.ceil(totalCount / pageSize);
 
   const filteredGames = useMemo(() => {
     return games.filter(game => {
@@ -25,6 +38,7 @@ const Index = () => {
     });
   }, [games, searchTerm, selectedStatus]);
 
+  // For stats, we need to calculate from all games, not just current page
   const crackedGames = useMemo(() => 
     games.filter(game => game.crack_status?.status === "cracked"), [games]);
   
@@ -41,6 +55,11 @@ const Index = () => {
   const getDaysSinceCrack = (crackDate: string) => {
     const days = Math.floor((Date.now() - new Date(crackDate).getTime()) / (1000 * 60 * 60 * 24));
     return days;
+  };
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   if (error) {
@@ -82,7 +101,14 @@ const Index = () => {
         />
 
         {/* Stats Section */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+          <StatsCard
+            title="Total Games"
+            value={totalCount}
+            description="In database"
+            color="blue"
+            icon={<Gamepad2 className="h-4 w-4 text-blue-400" />}
+          />
           <StatsCard
             title="Cracked Games"
             value={crackedGames.length}
@@ -122,7 +148,7 @@ const Index = () => {
         )}
 
         {/* Empty State */}
-        {!isLoading && !error && games.length === 0 && (
+        {!isLoading && !error && totalCount === 0 && (
           <div className="text-center py-12">
             <Gamepad2 className="h-16 w-16 text-gray-600 mx-auto mb-4" />
             <h3 className="text-xl font-semibold text-gray-300 mb-2">No Games Found</h3>
@@ -134,12 +160,77 @@ const Index = () => {
         )}
 
         {/* Main Content */}
-        {!isLoading && !error && games.length > 0 && (
-          <GameTabs
-            filteredGames={filteredGames}
-            latestCracks={latestCracks}
-            uncrackedGames={uncrackedGames}
-          />
+        {!isLoading && !error && totalCount > 0 && (
+          <>
+            <GameTabs
+              filteredGames={filteredGames}
+              latestCracks={latestCracks}
+              uncrackedGames={uncrackedGames}
+            />
+            
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="mt-8 flex justify-center">
+                <Pagination>
+                  <PaginationContent className="bg-gray-800/50 rounded-lg p-2">
+                    <PaginationItem>
+                      <PaginationPrevious 
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          if (currentPage > 1) handlePageChange(currentPage - 1);
+                        }}
+                        className={currentPage === 1 ? "pointer-events-none opacity-50" : "text-white hover:bg-gray-700"}
+                      />
+                    </PaginationItem>
+                    
+                    {[...Array(Math.min(5, totalPages))].map((_, i) => {
+                      const page = i + 1;
+                      return (
+                        <PaginationItem key={page}>
+                          <PaginationLink
+                            href="#"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              handlePageChange(page);
+                            }}
+                            isActive={currentPage === page}
+                            className={currentPage === page 
+                              ? "bg-blue-600 text-white" 
+                              : "text-gray-300 hover:bg-gray-700 hover:text-white"
+                            }
+                          >
+                            {page}
+                          </PaginationLink>
+                        </PaginationItem>
+                      );
+                    })}
+                    
+                    {totalPages > 5 && (
+                      <PaginationItem>
+                        <span className="text-gray-400 px-2">...</span>
+                      </PaginationItem>
+                    )}
+                    
+                    <PaginationItem>
+                      <PaginationNext 
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          if (currentPage < totalPages) handlePageChange(currentPage + 1);
+                        }}
+                        className={currentPage === totalPages ? "pointer-events-none opacity-50" : "text-white hover:bg-gray-700"}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              </div>
+            )}
+            
+            <div className="text-center mt-4 text-gray-400 text-sm">
+              Showing {((currentPage - 1) * pageSize) + 1} - {Math.min(currentPage * pageSize, totalCount)} of {totalCount} games
+            </div>
+          </>
         )}
       </div>
     </div>

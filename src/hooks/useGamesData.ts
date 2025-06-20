@@ -27,12 +27,25 @@ export interface Game {
   };
 }
 
-export const useGamesData = () => {
+export const useGamesData = (page: number = 1, pageSize: number = 50) => {
   return useQuery({
-    queryKey: ['games'],
-    queryFn: async (): Promise<Game[]> => {
-      console.log('Fetching games from database...');
+    queryKey: ['games', page, pageSize],
+    queryFn: async (): Promise<{ games: Game[], totalCount: number }> => {
+      console.log(`Fetching games from database... Page: ${page}, Size: ${pageSize}`);
       
+      const from = (page - 1) * pageSize;
+      const to = from + pageSize - 1;
+
+      // Get total count first
+      const { count, error: countError } = await supabase
+        .from('games')
+        .select('*', { count: 'exact', head: true });
+
+      if (countError) {
+        console.error('Error getting total count:', countError);
+        throw countError;
+      }
+
       const { data, error } = await supabase
         .from('games')
         .select(`
@@ -44,22 +57,22 @@ export const useGamesData = () => {
             drm_protection
           )
         `)
-        .order('players_2weeks', { ascending: false })
-        .limit(50);
+        .order('players_2weeks', { ascending: false, nullsLast: true })
+        .range(from, to);
 
       if (error) {
         console.error('Error fetching games:', error);
         throw error;
       }
 
-      console.log(`Fetched ${data?.length || 0} games from database`);
+      console.log(`Fetched ${data?.length || 0} games from database (Page ${page})`);
 
       if (!data || data.length === 0) {
         console.log('No games found in database. Try syncing with SteamSpy first.');
-        return [];
+        return { games: [], totalCount: count || 0 };
       }
 
-      return data.map(game => ({
+      const games = data.map(game => ({
         id: game.id,
         steam_id: game.steam_id,
         title: game.title,
@@ -86,6 +99,8 @@ export const useGamesData = () => {
           drm_protection: ["Steam"]
         }
       }));
+
+      return { games, totalCount: count || 0 };
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 30 * 60 * 1000, // 30 minutes
@@ -100,7 +115,7 @@ export const useSyncSteamSpy = () => {
       console.log('Syncing with SteamSpy API...');
       
       const { data, error } = await supabase.functions.invoke('sync-steamspy', {
-        body: { limit: 100 }
+        body: { limit: 1000 } // Increase limit to get more games
       });
 
       if (error) {
