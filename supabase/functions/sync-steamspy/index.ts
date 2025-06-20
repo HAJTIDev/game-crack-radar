@@ -30,60 +30,58 @@ serve(async (req) => {
       console.log('No valid JSON body provided, using defaults');
     }
 
-    const { searchTerm, limit = 100 } = requestData;
+    const { limit = 100 } = requestData;
     
-    console.log(`Fetching data from SteamSpy API with limit: ${limit}`);
+    console.log(`Fetching data from Steam Web API with limit: ${limit}`);
 
-    // Fetch data from SteamSpy API - use top100in2weeks by default
-    const steamSpyUrl = searchTerm 
-      ? `https://steamspy.com/api.php?request=all&format=json`
-      : `https://steamspy.com/api.php?request=top100in2weeks&format=json`;
+    // Fetch data from Steam Web API
+    const steamUrl = 'https://api.steampowered.com/ISteamApps/GetAppList/v2/';
     
-    console.log(`Requesting from: ${steamSpyUrl}`);
+    console.log(`Requesting from: ${steamUrl}`);
     
-    const response = await fetch(steamSpyUrl);
+    const response = await fetch(steamUrl);
     if (!response.ok) {
-      throw new Error(`SteamSpy API returned ${response.status}: ${response.statusText}`);
+      throw new Error(`Steam API returned ${response.status}: ${response.statusText}`);
     }
     
-    const steamSpyData = await response.json();
+    const steamData = await response.json();
+    const apps = steamData.applist?.apps || [];
 
-    console.log(`Received ${Object.keys(steamSpyData).length} games from SteamSpy`);
+    console.log(`Received ${apps.length} apps from Steam API`);
 
     // Process and insert/update games in our database
     const gamesToInsert = [];
     const crackStatusToInsert = [];
     
-    let count = 0;
-    for (const [steamId, gameData] of Object.entries(steamSpyData)) {
-      if (count >= limit) break;
-      
-      // Skip if essential data is missing
-      if (!gameData.name || !steamId) continue;
-
+    // Take only the first 'limit' apps and filter out non-games (apps with very low appids are usually tools/DLC)
+    const filteredApps = apps
+      .filter(app => app.appid > 10000 && app.name && app.name.length > 3)
+      .slice(0, limit);
+    
+    for (const app of filteredApps) {
       const game = {
-        steam_id: parseInt(steamId),
-        title: gameData.name,
-        developer: gameData.developer || null,
-        publisher: gameData.publisher || null,
-        genre: gameData.genre || null,
-        tags: gameData.tags ? Object.keys(gameData.tags) : [],
-        owners: gameData.owners || null,
-        owners_variance: gameData.owners_variance || null,
-        players_forever: gameData.players_forever || null,
-        players_forever_variance: gameData.players_forever_variance || null,
-        players_2weeks: gameData.players_2weeks || null,
-        players_2weeks_variance: gameData.players_2weeks_variance || null,
-        average_forever: gameData.average_forever || null,
-        average_2weeks: gameData.average_2weeks || null,
-        median_forever: gameData.median_forever || null,
-        median_2weeks: gameData.median_2weeks || null,
-        score_rank: gameData.score_rank || null,
-        positive: gameData.positive || null,
-        negative: gameData.negative || null,
-        userscore: gameData.userscore || null,
-        price: gameData.price ? parseFloat(gameData.price) / 100 : null, // Convert cents to dollars
-        is_free: gameData.price === 0,
+        steam_id: app.appid,
+        title: app.name,
+        developer: null,
+        publisher: null,
+        genre: null,
+        tags: [],
+        owners: null,
+        owners_variance: null,
+        players_forever: null,
+        players_forever_variance: null,
+        players_2weeks: null,
+        players_2weeks_variance: null,
+        average_forever: null,
+        average_2weeks: null,
+        median_forever: null,
+        median_2weeks: null,
+        score_rank: null,
+        positive: null,
+        negative: null,
+        userscore: null,
+        price: null,
+        is_free: false,
         last_synced_at: new Date().toISOString()
       };
 
@@ -91,14 +89,13 @@ serve(async (req) => {
 
       // Create initial crack status (assume uncracked for new games)
       const crackStatus = {
-        steam_id: parseInt(steamId),
+        steam_id: app.appid,
         status: 'uncracked',
         drm_protection: ['Steam'], // Default Steam DRM
         verified: false
       };
 
       crackStatusToInsert.push(crackStatus);
-      count++;
     }
 
     console.log(`Processing ${gamesToInsert.length} games for database insertion`);
@@ -157,7 +154,7 @@ serve(async (req) => {
       JSON.stringify({ 
         success: true, 
         processed: gamesToInsert.length,
-        message: 'SteamSpy data synchronized successfully' 
+        message: 'Steam data synchronized successfully' 
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
