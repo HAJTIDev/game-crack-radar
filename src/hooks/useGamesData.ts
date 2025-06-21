@@ -57,7 +57,7 @@ export const useGamesData = (page: number = 1, pageSize: number = 50) => {
             drm_protection
           )
         `)
-        .order('players_2weeks', { ascending: false, nullsLast: true })
+        .order('players_2weeks', { ascending: false, nullsFirst: false })
         .range(from, to);
 
       if (error) {
@@ -112,18 +112,18 @@ export const useSyncSteamSpy = () => {
   return useQuery({
     queryKey: ['sync-steamspy'],
     queryFn: async () => {
-      console.log('Syncing with SteamSpy API...');
+      console.log('Syncing with Steam API...');
       
       const { data, error } = await supabase.functions.invoke('sync-steamspy', {
         body: { limit: 1000 } // Increase limit to get more games
       });
 
       if (error) {
-        console.error('Error syncing with SteamSpy:', error);
+        console.error('Error syncing with Steam API:', error);
         throw error;
       }
 
-      console.log('SteamSpy sync completed:', data);
+      console.log('Steam API sync completed:', data);
       return data;
     },
     enabled: false, // Only run when manually triggered
