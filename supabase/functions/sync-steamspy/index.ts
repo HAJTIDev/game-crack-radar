@@ -10,28 +10,42 @@ const corsHeaders = {
 // Helper function to delay execution
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Helper function to fetch app details from Steam Storefront API
-const fetchAppDetails = async (appid: number) => {
-  try {
-    const response = await fetch(`https://store.steampowered.com/api/appdetails?appids=${appid}`);
-    if (!response.ok) {
-      console.log(`Failed to fetch details for app ${appid}: ${response.status}`);
-      return null;
+// Helper function to fetch app details from Steam Storefront API with retry logic
+const fetchAppDetails = async (appid: number, retries = 2) => {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const response = await fetch(`https://store.steampowered.com/api/appdetails?appids=${appid}`, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+      });
+      
+      if (!response.ok) {
+        if (attempt === retries) {
+          console.log(`Failed to fetch details for app ${appid} after ${retries + 1} attempts: ${response.status}`);
+          return null;
+        }
+        await delay(1000 * (attempt + 1)); // Exponential backoff
+        continue;
+      }
+      
+      const data = await response.json();
+      const appData = data[appid.toString()];
+      
+      if (!appData || !appData.success || !appData.data) {
+        return null;
+      }
+      
+      return appData.data;
+    } catch (error) {
+      if (attempt === retries) {
+        console.log(`Error fetching details for app ${appid}:`, error);
+        return null;
+      }
+      await delay(1000 * (attempt + 1));
     }
-    
-    const data = await response.json();
-    const appData = data[appid.toString()];
-    
-    if (!appData || !appData.success || !appData.data) {
-      console.log(`No valid data found for app ${appid}`);
-      return null;
-    }
-    
-    return appData.data;
-  } catch (error) {
-    console.log(`Error fetching details for app ${appid}:`, error);
-    return null;
   }
+  return null;
 };
 
 serve(async (req) => {
@@ -57,7 +71,7 @@ serve(async (req) => {
       console.log('No valid JSON body provided, using defaults');
     }
 
-    const { limit = 50 } = requestData;
+    const { limit = 100 } = requestData; // Reduced default limit for faster processing
     
     console.log(`Fetching data from Steam Web API with limit: ${limit}`);
 
@@ -80,93 +94,97 @@ serve(async (req) => {
     const gamesToInsert = [];
     const crackStatusToInsert = [];
     
-    // Take only the first 'limit' apps and filter out non-games (apps with very low appids are usually tools/DLC)
+    // Filter apps more aggressively to get better quality games
     const filteredApps = apps
-      .filter(app => app.appid > 10000 && app.name && app.name.length > 3)
+      .filter(app => {
+        // Filter for likely actual games (higher appids, reasonable name length)
+        return app.appid > 50000 && 
+               app.name && 
+               app.name.length > 2 && 
+               app.name.length < 100 &&
+               !app.name.includes('Demo') &&
+               !app.name.includes('SDK') &&
+               !app.name.includes('Dedicated Server') &&
+               !app.name.includes('Beta');
+      })
       .slice(0, limit);
     
-    console.log(`Processing ${filteredApps.length} apps for detailed information...`);
+    console.log(`Processing ${filteredApps.length} filtered apps for detailed information...`);
 
-    for (let i = 0; i < filteredApps.length; i++) {
-      const app = filteredApps[i];
-      console.log(`Processing ${i + 1}/${filteredApps.length}: ${app.name} (${app.appid})`);
+    // Process apps in smaller batches to avoid timeouts
+    const batchSize = 10;
+    let processedCount = 0;
+
+    for (let i = 0; i < filteredApps.length; i += batchSize) {
+      const batch = filteredApps.slice(i, i + batchSize);
       
-      // Fetch detailed information from Steam Storefront API
-      const appDetails = await fetchAppDetails(app.appid);
+      // Process batch concurrently with limited concurrency
+      const batchPromises = batch.map(async (app) => {
+        console.log(`Processing ${processedCount + 1}/${filteredApps.length}: ${app.name} (${app.appid})`);
+        processedCount++;
+        
+        // Fetch detailed information from Steam Storefront API
+        const appDetails = await fetchAppDetails(app.appid);
+        
+        let gameData;
+        
+        if (appDetails && appDetails.type === 'game') { // Only process actual games
+          // Rich data from Steam Storefront API
+          gameData = {
+            steam_id: app.appid,
+            title: appDetails.name || app.name,
+            developer: appDetails.developers?.join(', ') || null,
+            publisher: appDetails.publishers?.join(', ') || null,
+            genre: appDetails.genres?.map(g => g.description).join(', ') || null,
+            tags: appDetails.categories?.map(c => c.description) || [],
+            description: appDetails.short_description || null,
+            release_date: appDetails.release_date?.date ? new Date(appDetails.release_date.date).toISOString().split('T')[0] : null,
+            price: appDetails.price_overview?.final_formatted ? parseFloat(appDetails.price_overview.final_formatted.replace(/[^0-9.]/g, '')) : null,
+            is_free: appDetails.is_free || false,
+            header_image: appDetails.header_image || null,
+            website: appDetails.website || null,
+            metacritic_score: appDetails.metacritic?.score || null,
+            metacritic_url: appDetails.metacritic?.url || null,
+            screenshots_count: appDetails.screenshots?.length || 0,
+            achievements: appDetails.achievements?.total || 0,
+            has_achievements: (appDetails.achievements?.total || 0) > 0,
+            has_trading_cards: appDetails.categories?.some(c => c.id === 29) || false,
+            has_dlc: (appDetails.dlc || []).length > 0,
+            dlc_count: (appDetails.dlc || []).length,
+            early_access: appDetails.genres?.some(g => g.description === 'Early Access') || false,
+            languages: appDetails.supported_languages ? [appDetails.supported_languages] : [],
+            last_synced_at: new Date().toISOString()
+          };
+
+          // Create initial crack status (assume uncracked for new games)
+          const crackStatus = {
+            steam_id: app.appid,
+            status: 'uncracked',
+            drm_protection: ['Steam'], // Default Steam DRM
+            verified: false
+          };
+
+          return { gameData, crackStatus };
+        }
+        
+        return null;
+      });
+
+      // Wait for batch to complete
+      const batchResults = await Promise.all(batchPromises);
       
-      // Add delay to avoid rate limiting (Steam can be strict about this)
-      await delay(200);
-      
-      let gameData;
-      
-      if (appDetails) {
-        // Rich data from Steam Storefront API
-        gameData = {
-          steam_id: app.appid,
-          title: appDetails.name || app.name,
-          developer: appDetails.developers?.join(', ') || null,
-          publisher: appDetails.publishers?.join(', ') || null,
-          genre: appDetails.genres?.map(g => g.description).join(', ') || null,
-          tags: appDetails.categories?.map(c => c.description) || [],
-          description: appDetails.short_description || null,
-          release_date: appDetails.release_date?.date ? new Date(appDetails.release_date.date).toISOString().split('T')[0] : null,
-          price: appDetails.price_overview?.final_formatted ? parseFloat(appDetails.price_overview.final_formatted.replace(/[^0-9.]/g, '')) : null,
-          is_free: appDetails.is_free || false,
-          header_image: appDetails.header_image || null,
-          website: appDetails.website || null,
-          metacritic_score: appDetails.metacritic?.score || null,
-          metacritic_url: appDetails.metacritic?.url || null,
-          screenshots_count: appDetails.screenshots?.length || 0,
-          achievements: appDetails.achievements?.total || 0,
-          has_achievements: (appDetails.achievements?.total || 0) > 0,
-          has_trading_cards: appDetails.categories?.some(c => c.id === 29) || false,
-          has_dlc: (appDetails.dlc || []).length > 0,
-          dlc_count: (appDetails.dlc || []).length,
-          early_access: appDetails.genres?.some(g => g.description === 'Early Access') || false,
-          languages: appDetails.supported_languages ? [appDetails.supported_languages] : [],
-          last_synced_at: new Date().toISOString()
-        };
-      } else {
-        // Fallback to basic data if detailed fetch fails
-        gameData = {
-          steam_id: app.appid,
-          title: app.name,
-          developer: null,
-          publisher: null,
-          genre: null,
-          tags: [],
-          owners: null,
-          owners_variance: null,
-          players_forever: null,
-          players_forever_variance: null,
-          players_2weeks: null,
-          players_2weeks_variance: null,
-          average_forever: null,
-          average_2weeks: null,
-          median_forever: null,
-          median_2weeks: null,
-          score_rank: null,
-          positive: null,
-          negative: null,
-          userscore: null,
-          price: null,
-          is_free: false,
-          header_image: null,
-          last_synced_at: new Date().toISOString()
-        };
+      // Add valid results to arrays
+      batchResults.forEach(result => {
+        if (result) {
+          gamesToInsert.push(result.gameData);
+          crackStatusToInsert.push(result.crackStatus);
+        }
+      });
+
+      // Add delay between batches to respect rate limits
+      if (i + batchSize < filteredApps.length) {
+        await delay(500);
       }
-
-      gamesToInsert.push(gameData);
-
-      // Create initial crack status (assume uncracked for new games)
-      const crackStatus = {
-        steam_id: app.appid,
-        status: 'uncracked',
-        drm_protection: ['Steam'], // Default Steam DRM
-        verified: false
-      };
-
-      crackStatusToInsert.push(crackStatus);
     }
 
     console.log(`Processing ${gamesToInsert.length} games for database insertion`);
@@ -225,7 +243,7 @@ serve(async (req) => {
       JSON.stringify({ 
         success: true, 
         processed: gamesToInsert.length,
-        message: 'Steam data synchronized successfully with detailed information' 
+        message: `Steam data synchronized successfully. Processed ${gamesToInsert.length} games.` 
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
